@@ -7,25 +7,37 @@ from dataclasses import dataclass
 from threading import Thread
 import sys
 from queue import Queue
+import os
 
-VideoPath = "/Users/akshar/Downloads/Humans in Autonomy/DroneFootageAnalysis/SampleVid.mp4"
-REFERENCE_INSPECTION_FRAME = cv2.imread("/Users/akshar/Downloads/Humans in Autonomy/DroneFootageAnalysis/blankFrame.jpg")
-CROPPED_REFERENCE = cv2.imread("/Users/akshar/Downloads/Humans in Autonomy/DroneFootageAnalysis/ReferenceUnderJoystick.jpg")
-LEFT_JOYSTICK = cv2.imread("/Users/akshar/Downloads/Humans in Autonomy/DroneFootageAnalysis/leftJoystick.jpg")
-RIGHT_JOYSTICK = cv2.imread("/Users/akshar/Downloads/Humans in Autonomy/DroneFootageAnalysis/rightJoystick.jpg")
-TESSERACT_PATH = "/Users/akshar/Downloads/Humans in Autonomy/DroneFootageAnalysis/tesseractPattern.txt"
+# change this path to git directory
+ROOT_PATH = "/Users/akshar/Downloads/Humans in Autonomy/"
 
-LEFT_JOYSTICK_DIFFERENCE_THRESHOLD = 280000
-RIGHT_JOYSTICK_DIFFERENCE_THRESHOLD = 260000
-INSPECTION_MODE_THRESHOLD = 450000
+# change this path to video directory
+VIDEO_PATH = "/Users/akshar/Downloads/Humans in Autonomy/"
 
-start_frame_number = 0
+reference_frame_path = ROOT_PATH + "blankFrame.jpg"
+cropped_path = ROOT_PATH + "ReferenceUnderJoystick.jpg"
+left_path = ROOT_PATH + "leftJoystick.jpg"
+right_path = ROOT_PATH + "rightJoystick.jpg"
+
+REFERENCE_INSPECTION_FRAME = cv2.imread(reference_frame_path)
+CROPPED_REFERENCE = cv2.imread(cropped_path)
+LEFT_JOYSTICK = cv2.imread(left_path)
+RIGHT_JOYSTICK = cv2.imread(right_path)
+
+LEFT_JOYSTICK_DIFFERENCE_THRESHOLD = 301000
+RIGHT_JOYSTICK_DIFFERENCE_THRESHOLD = 251000
+INSPECTION_MODE_THRESHOLD = 401500
+
+start_frame_number = 1000
 #cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame_number)
 cv2.startWindowThread()
 
 times = []
 all_times = []
 ocr_error = []
+
+csvName = ""
 
 @dataclass
 class ClickEvent:
@@ -89,7 +101,7 @@ class FileVideoStream:
 def isInspectionMode(left, right):
     left_diff = cv2.subtract(left, LEFT_JOYSTICK)
     right_diff = cv2.subtract(right, RIGHT_JOYSTICK)
-
+    # print ((left_diff.sum() + right_diff.sum())/2)
     if (left_diff.sum() + right_diff.sum())/2 < INSPECTION_MODE_THRESHOLD:
         return True
     else:
@@ -121,6 +133,13 @@ def flightTime(frame):
     time_str = pytesseract.image_to_string(time_frame, config='--psm 6 -c tessedit_char_whitelist=0123456789:')
     try:
         seconds = (time.strptime(time_str, '%M:%S')[4]*60) + time.strptime(time_str, '%M:%S')[5]
+        if all_times:
+            print (all_times)
+            if all_times[-1] > 100 and seconds in range(0, 10):
+                print ("clearing arrays", seconds)
+                times.clear()
+                all_times.clear()
+                ocr_error.clear()
         return seconds
     except:
         # print ("BAD OCR. READ {}".format(time_str))
@@ -146,25 +165,35 @@ def checkJoysticks(frame):
             all_times.append(time)
         if isLeftClick(leftJoystick, LEFT_JOYSTICK) and not isRightClick(rightJoystick, RIGHT_JOYSTICK):
             if time not in times or not time:
-                with open('/Users/akshar/Downloads/Humans in Autonomy/DroneFootageAnalysis/times.csv', 'a') as csvfile:
+                with open(csvName, 'a') as csvfile:
                     filewriter = csv.writer(csvfile)
                     filewriter.writerow(['1', str(time)])
                 times.append(time)
         if isRightClick(rightJoystick, RIGHT_JOYSTICK):
             if time not in times or not time:
-                with open('/Users/akshar/Downloads/Humans in Autonomy/DroneFootageAnalysis/times.csv', 'a') as csvfile:
+                with open(csvName, 'a') as csvfile:
                     filewriter = csv.writer(csvfile)
                     filewriter.writerow(['2', str(time)])
                 times.append(time)
 
-stream = FileVideoStream(VideoPath).start()
-time.sleep(1.0)
-print ("Checking if buffer exists...", stream.more())
-while stream.more():
-    frame = stream.read()
-    #cv2.imshow("frame", frame)
-    checkJoysticks(frame)
-    # print ("Checking buffer size...", stream.size())
-    if cv2.waitKey(25) & 0xFF == ord('q'):
-        break
-print ("Video Complete")
+for subdir, dirs, files in os.walk(VIDEO_PATH):
+        for file in files:
+            if file.endswith(".mp4"):
+                print ("currently processing video", file)
+                VideoPath = subdir + os.sep + file
+                csvName = subdir + os.sep + file.split(".")[0] + ".csv"
+                stream = FileVideoStream(VideoPath).start()
+                time.sleep(1.0)
+                print ("Checking if buffer exists...", stream.more())
+                while stream.more():
+                    frame = stream.read()
+                    # cv2.imshow("frame", frame)
+                    checkJoysticks(frame)
+                    # print ("Checking buffer size...", stream.size())
+                    if cv2.waitKey(25) & 0xFF == ord('q'):
+                        break
+                print ("Video Complete")
+                print ("clearing arrays")
+                times.clear()
+                all_times.clear()
+                ocr_error.clear()
