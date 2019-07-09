@@ -18,8 +18,6 @@ visionData = []
 # Import the data from the Vision Data Sheet into an array
 def importVisionData():
 
-    print("Importing Vision Data ...")
-
     for i in range(visionSheet.max_row):
         visionData.append(int(visionSheet.cell(i + 1, 1).value))
 
@@ -27,8 +25,6 @@ def importVisionData():
 
 # Export the array into the experiment sheet
 def exportVisionData():
-    
-    print("Exporting Vision Data ...")
     
     countVisData = 0
     for i in range(expSheet.max_row):
